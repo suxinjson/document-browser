@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>解密测试</title>
+</head>
+<body>
+    <h1>解密测试</h1>
+    <button onclick="testDecrypt()">测试解密</button>
+    <pre id="result"></pre>
+
+    <script>
+        async function decryptData(encryptedBase64, key) {
+            try {
+                var encryptedData = Uint8Array.from(atob(encryptedBase64), function(c) { return c.charCodeAt(0); });
+                var iv = encryptedData.slice(0, 16);
+                var ciphertext = encryptedData.slice(16);
+
+                var keyData = new TextEncoder().encode(key);
+                var hashBuffer = await crypto.subtle.digest('SHA-256', keyData);
+                var cryptoKey = await crypto.subtle.importKey('raw', hashBuffer, { name: 'AES-CBC' }, false, ['decrypt']);
+
+                var decryptedBuffer = await crypto.subtle.decrypt({ name: 'AES-CBC', iv: iv }, cryptoKey, ciphertext);
+                return new TextDecoder().decode(decryptedBuffer);
+            } catch (e) {
+                return "解密失败: " + e.message;
+            }
+        }
+
+        async function testDecrypt() {
+            const resultEl = document.getElementById('result');
+            resultEl.textContent = '正在测试...';
+
+            // 1. 先登录获取 session key
+            try {
+                const authResp = await fetch('/api/auth', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ password: '123456' })
+                });
+                const authData = await authResp.json();
+
+                if (!authData.success) {
+                    resultEl.textContent = '登录失败: ' + JSON.stringify(authData);
+                    return;
+                }
+
+                const sessionKey = authData.key;
+                resultEl.textContent = '登录成功，session key: ' + sessionKey + '\n\n正在获取文件树...';
+
+                // 2. 获取文件树
+                const treeResp = await fetch('/api/tree');
+                const treeData = await treeResp.json();
+
+                resultEl.textContent += '\n\n加密数据长度: ' + treeData.data.length;
+                resultEl.textContent += '\n\n正在解密...';
+
+                // 3. 解密
+                const decrypted = await decryptData(treeData.data, sessionKey);
+                resultEl.textContent += '\n\n解密结果:\n' + decrypted.substring(0, 500) + '...';
+
+            } catch (e) {
+                resultEl.textContent = '错误: ' + e.message + '\n\n' + e.stack;
+            }
+        }
+    </script>
+</body>
+</html>

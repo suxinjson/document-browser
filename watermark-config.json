@@ -1,0 +1,16 @@
+{
+  "enabled": true,
+  "text": "机密文档 严禁传播 违者必究",
+  "count": 100,
+  "fontSize": 12,
+  "fontFamily": "Arial",
+  "letterSpacing": 2,
+  "colors": [
+    "rgba(0,0,0,0.01)",
+    "rgba(255,0,0,0.01)",
+    "rgba(0,0,255,0.01)"
+  ],
+  "rotations": [-45, -40, -35],
+  "gridColumns": 20,
+  "checkInterval": 2000
+}
