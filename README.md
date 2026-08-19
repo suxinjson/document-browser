@@ -75,4 +75,4 @@ dotnet run -- "D:\我的文档"
 ## 📌 说明
 
 - 本项目当前为中文界面，面向个人 / 团队内部文档的安全分享场景
-- `.dll` / `.exe` / `.pdb` / `.cache` 等二进制文件通过 Git LFS 管理；`bin/` `obj/` `.vs/` 已加入 `.gitignore`
+- `bin/` `obj/` `.vs/` 已加入 `.gitignore`,构建产物与 IDE 缓存不会进入版本库
