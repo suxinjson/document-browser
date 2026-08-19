@@ -253,6 +253,29 @@ app.MapGet("/api/share/{shareId}/file", (HttpContext ctx, ShowcaseConfigStore st
     return Results.Json(new { encrypted = true, data = encrypted });
 });
 
+app.MapGet("/api/share/{shareId}/image", (HttpContext ctx, ShowcaseConfigStore store, string shareId, string? cur, string? link) =>
+{
+    var share = GetEnabledShare(store, shareId);
+    if (share is null) return Results.NotFound(new { message = "共享不存在或已停用" });
+    if (!IsAuthenticated(ctx, share)) return Results.Unauthorized();
+
+    if (share.Settings.EncryptionEnabled)
+    {
+        var sessionKey = GetSessionKey(ctx, share);
+        if (string.IsNullOrEmpty(sessionKey)) return Results.Unauthorized();
+    }
+
+    if (string.IsNullOrEmpty(cur) || string.IsNullOrEmpty(link)) return Results.BadRequest();
+
+    var currentAbs = Path.GetFullPath(Path.Combine(share.Path, cur));
+    var rootFull = Path.GetFullPath(share.Path);
+    if (!currentAbs.StartsWith(rootFull, StringComparison.OrdinalIgnoreCase)) return Results.BadRequest();
+
+    var img = FileService.GetImageBytes(share.Path, currentAbs, link);
+    if (img is null) return Results.NotFound();
+    return Results.File(img.Value.Bytes, img.Value.ContentType);
+});
+
 app.MapGet("/api/share/{shareId}/logs", (HttpContext ctx, ShowcaseConfigStore store, string shareId) =>
 {
     var share = GetEnabledShare(store, shareId);

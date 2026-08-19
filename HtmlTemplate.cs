@@ -9,8 +9,8 @@ static class HtmlTemplate
 <title>文档浏览器</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/github-markdown-css@5/github-markdown-light.min.css">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11/styles/github.min.css">
-<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/highlight.js@11/highlight.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/marked@4.3.0/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets@11.11.1/highlight.min.js"></script>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   :root {
@@ -129,6 +129,13 @@ static class HtmlTemplate
   .markdown-body img { max-width: 100%; border-radius: 8px; }
   .raw-file { padding: 20px; background: var(--sidebar-bg); border-radius: 8px; color: var(--text2); }
   .raw-file .filename { font-weight: 700; font-size: 16px; margin-bottom: 8px; }
+  .toast {
+    position: fixed; top: 20px; left: 50%; transform: translateX(-50%) translateY(-20px);
+    background: rgba(20,20,30,0.9); color: #fff; padding: 10px 18px; border-radius: 8px;
+    font-size: 14px; z-index: 9999; opacity: 0; pointer-events: none;
+    transition: opacity 0.2s, transform 0.2s;
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 
   /* 防复制和防截屏保护 */
   body.protect-copy * { user-select: none; -webkit-user-select: none; -moz-user-select: none; -ms-user-select: none; }
@@ -217,6 +224,9 @@ static class HtmlTemplate
   </div>
 </div>
 
+<!-- 提示 -->
+<div id="toast" class="toast"></div>
+
 <script>
 marked.setOptions({
   highlight: function(code, lang) {
@@ -226,7 +236,40 @@ marked.setOptions({
   breaks: true, gfm: true
 });
 
+// 自定义 renderer：重写链接和图片，支持相对路径跳转与图片加载
+var IMAGE_EXT = /\.(png|jpe?g|gif|webp|svg|bmp)$/i;
+var mdRenderer = new marked.Renderer();
+
+mdRenderer.link = function(href, title, text) {
+  if (href == null) return text;
+  var isExternal = /^(https?:)?\/\//i.test(href) || /^(mailto:|tel:)/i.test(href);
+  var titleAttr = title ? ' title="' + esc(title) + '"' : '';
+  if (isExternal) {
+    return '<a href="' + esc(href) + '"' + titleAttr + ' target="_blank" rel="noopener noreferrer">' + text + '</a>';
+  }
+  // 相对路径：交给 SPA 内部处理
+  return '<a href="javascript:void(0)" data-link="' + esc(href) + '"' + titleAttr + '>' + text + '</a>';
+};
+
+mdRenderer.image = function(href, title, text) {
+  if (href == null) return text;
+  var isExternal = /^(https?:)?\/\//i.test(href);
+  var url;
+  if (isExternal) {
+    url = href;
+  } else if (IMAGE_EXT.test(href)) {
+    url = apiBase + '/image?cur=' + encodeURIComponent(currentFilePath) + '&link=' + encodeURIComponent(href);
+  } else {
+    // 非图片相对资源：交给链接逻辑（不渲染为 img，避免 broken）
+    return '<a href="javascript:void(0)" data-link="' + esc(href) + '">' + text + '</a>';
+  }
+  var titleAttr = title ? ' title="' + esc(title) + '"' : '';
+  return '<img src="' + esc(url) + '" alt="' + esc(text) + '"' + titleAttr + ' />';
+};
+
 let treeData = null;
+let flatNodes = []; // 扁平化的节点列表：{id, relPath, type}
+let currentFilePath = ''; // 当前打开文件的 root 相对路径
 let isAuthenticated = false;
 let sessionKey = null;
 let isAdmin = false;
@@ -374,6 +417,9 @@ function loadTree() {
       console.log('Is array?', Array.isArray(data));
       console.log('Data length:', Array.isArray(data) ? data.length : 'not array');
       treeData = data;
+      // 扁平化树，用于按相对路径查找节点
+      flatNodes = [];
+      flattenNodes(data, '');
       // 如果 data 是数组,直接渲染数组内容
       var html = '';
       if (Array.isArray(data)) {
@@ -399,8 +445,21 @@ function loadTree() {
     });
 }
 
+// 扁平化树，记录每个节点的 root 相对路径
+function flattenNodes(node, parentRel) {
+  if (Array.isArray(node)) {
+    node.forEach(function(n) { flattenNodes(n, parentRel); });
+    return;
+  }
+  if (!node) return;
+  var rel = node.relPath != null ? node.relPath : (parentRel ? parentRel + '/' + node.name : node.name);
+  flatNodes.push({ id: node.id, relPath: rel, type: node.type });
+  if (node.children && node.children.length > 0) {
+    node.children.forEach(function(c) { flattenNodes(c, rel); });
+  }
+}
+
 function renderTree(node) {
-  // 处理文件节点
   if (node.type === 'file') {
     var icon = node.isMd ? '&#128221;' : '&#128196;';
     var cls = node.isMd ? 'md-file' : '';
@@ -459,13 +518,14 @@ function showFile(fid) {
       var info = await readApiPayload(response);
 
       var parts = info.path.split('/');
+      currentFilePath = info.path;
       document.getElementById('breadcrumb').innerHTML =
         '<span onclick="showWelcome()">&#127968; 根目录</span>' +
         parts.map(function(p) { return ' <span>/</span> <span>' + esc(p) + '</span>'; }).join('');
 
       var contentEl = document.getElementById('fileContent');
       if (info.isMd) {
-        contentEl.innerHTML = '<div class="markdown-body">' + marked.parse(info.content || '') + '</div>';
+        contentEl.innerHTML = '<div class="markdown-body">' + marked.parse(info.content || '', { renderer: mdRenderer }) + '</div>';
       } else {
         contentEl.innerHTML = '<div class="raw-file"><div class="filename">&#128196; ' + esc(info.name) + '</div>'
           + '<div>此文件不是 Markdown 格式,无法预览内容。</div></div>';
@@ -478,6 +538,89 @@ function showWelcome() {
   document.getElementById('welcome').style.display = 'flex';
   document.getElementById('contentArea').style.display = 'none';
 }
+
+// 解析相对链接，返回 {id, type} 或 null
+function resolveLink(link, curFilePath) {
+  if (!link || !curFilePath) return null;
+  // 去掉 anchor
+  var hashIdx = link.indexOf('#');
+  var pathPart = hashIdx >= 0 ? link.substring(0, hashIdx) : link;
+  if (!pathPart) return null;
+  // 当前文件所在目录（root 相对）
+  var baseDir = curFilePath.indexOf('/') >= 0 ? curFilePath.substring(0, curFilePath.lastIndexOf('/')) : '';
+  // 规范化路径
+  var segs = (baseDir ? baseDir.split('/') : []);
+  var parts = pathPart.split('/');
+  for (var i = 0; i < parts.length; i++) {
+    var p = parts[i];
+    if (p === '' || p === '.') continue;
+    if (p === '..') { segs.pop(); continue; }
+    segs.push(p);
+  }
+  var normalized = segs.join('/');
+
+  // 在 flatNodes 中匹配
+  function find(relPath) {
+    for (var i = 0; i < flatNodes.length; i++) {
+      if (flatNodes[i].relPath === relPath) return flatNodes[i];
+    }
+    return null;
+  }
+  var hit = find(normalized);
+  if (hit) return hit;
+  // 允许不带 .md 后缀
+  if (!IMAGE_EXT.test(normalized) && !/\.[a-z0-9]+$/i.test(normalized)) {
+    hit = find(normalized + '.md');
+    if (hit) return hit;
+  }
+  return null;
+}
+
+// 展开目录链并定位
+function expandDirById(id) {
+  var el = document.getElementById(id);
+  if (!el) return;
+  var cur = el;
+  while (cur && cur !== document.body) {
+    if (cur.classList && cur.classList.contains('dir-content')) {
+      if (cur.style.display === 'none') {
+        var arrow = document.getElementById('arrow-' + cur.id);
+        cur.style.display = 'block';
+        if (arrow) arrow.classList.add('open');
+      }
+    }
+    cur = cur.parentElement;
+  }
+  var header = document.querySelector('.dir-header');
+  // 滚动到该目录
+  var target = el.previousElementSibling || el;
+  if (target.scrollIntoView) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+// 轻量提示
+function toast(msg) {
+  var t = document.getElementById('toast');
+  if (!t) return;
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(toast._timer);
+  toast._timer = setTimeout(function() { t.classList.remove('show'); }, 2500);
+}
+
+// 链接点击事件委托
+document.addEventListener('click', function(e) {
+  var a = e.target.closest && e.target.closest('a[data-link]');
+  if (!a) return;
+  e.preventDefault();
+  var link = a.getAttribute('data-link');
+  var target = resolveLink(link, currentFilePath);
+  if (!target) { toast('目标文件不存在: ' + link); return; }
+  if (target.type === 'file') {
+    showFile(target.id);
+  } else {
+    expandDirById(target.id);
+  }
+});
 
 function toggleDir(id) {
   var el = document.getElementById(id);
