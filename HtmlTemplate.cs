@@ -11,6 +11,8 @@ static class HtmlTemplate
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11/styles/github.min.css">
 <script src="https://cdn.jsdelivr.net/npm/marked@4.3.0/marked.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets@11.11.1/highlight.min.js"></script>
+<!-- crypto-js：局域网 HTTP 下 crypto.subtle 不可用（仅 HTTPS / localhost 安全上下文可用），用它作 AES 解密回退 -->
+<script src="https://cdn.jsdelivr.net/npm/crypto-js@4.2.0/crypto-js.min.js"></script>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   :root {
@@ -283,18 +285,37 @@ let appConfig = {
   protectionEnabled: true
 };
 
-// AES 解密函数
+// AES 解密函数：优先使用原生 Web Crypto（仅 HTTPS / localhost 安全上下文可用），
+// 局域网 HTTP 下 crypto.subtle 不可用，回退到 CryptoJS（纯 JS 实现，算法与服务端一致）
 async function decryptData(encryptedBase64, key) {
-  var encryptedData = Uint8Array.from(atob(encryptedBase64), function(c) { return c.charCodeAt(0); });
-  var iv = encryptedData.slice(0, 16);
-  var ciphertext = encryptedData.slice(16);
+  if (window.crypto && crypto.subtle) {
+    var encryptedData = Uint8Array.from(atob(encryptedBase64), function(c) { return c.charCodeAt(0); });
+    var iv = encryptedData.slice(0, 16);
+    var ciphertext = encryptedData.slice(16);
 
-  var keyData = new TextEncoder().encode(key);
-  var hashBuffer = await crypto.subtle.digest('SHA-256', keyData);
-  var cryptoKey = await crypto.subtle.importKey('raw', hashBuffer, { name: 'AES-CBC' }, false, ['decrypt']);
+    var keyData = new TextEncoder().encode(key);
+    var hashBuffer = await crypto.subtle.digest('SHA-256', keyData);
+    var cryptoKey = await crypto.subtle.importKey('raw', hashBuffer, { name: 'AES-CBC' }, false, ['decrypt']);
 
-  var decryptedBuffer = await crypto.subtle.decrypt({ name: 'AES-CBC', iv: iv }, cryptoKey, ciphertext);
-  return new TextDecoder().decode(decryptedBuffer);
+    var decryptedBuffer = await crypto.subtle.decrypt({ name: 'AES-CBC', iv: iv }, cryptoKey, ciphertext);
+    return new TextDecoder().decode(decryptedBuffer);
+  }
+
+  // 回退：CryptoJS 解析 base64(IV[16] + AES-256-CBC 密文)，密钥 = SHA256(sessionKey)
+  if (window.CryptoJS) {
+    var combined = CryptoJS.enc.Base64.parse(encryptedBase64);
+    var iv = CryptoJS.lib.WordArray.create(combined.words.slice(0, 4), 16);
+    var ciphertext = CryptoJS.lib.WordArray.create(combined.words.slice(4), combined.sigBytes - 16);
+    var aesKey = CryptoJS.SHA256(key);
+    var decrypted = CryptoJS.AES.decrypt(
+      CryptoJS.lib.CipherParams.create({ ciphertext: ciphertext }),
+      aesKey,
+      { iv: iv, mode: CryptoJS.mode.CBC, padding: CryptoJS.pad.Pkcs7 }
+    );
+    return decrypted.toString(CryptoJS.enc.Utf8);
+  }
+
+  throw new Error('当前环境不支持解密（需 HTTPS / localhost，或 crypto-js 加载失败）');
 }
 
 async function readApiPayload(response) {
