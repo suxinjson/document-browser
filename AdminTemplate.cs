@@ -399,7 +399,7 @@ function renderWatermark(p, w) {
     + numField('字距', p + 'wmLetterSpacing', w.letterSpacing)
     + numField('网格列数', p + 'wmGridColumns', w.gridColumns)
     + numField('检查间隔(ms)', p + 'wmCheckInterval', w.checkInterval)
-    + textArea('颜色，每行一个 CSS 颜色', p + 'wmColors', (w.colors || []).join('\\n'))
+    + textArea('颜色，每行一个 CSS 颜色', p + 'wmColors', (w.colors || []).join('\n'))
     + field('旋转角度，逗号分隔', p + 'wmRotations', (w.rotations || []).join(', '))
     + '</div>';
 }
@@ -441,7 +441,7 @@ function readWatermark(p) {
     fontSize: Number(document.getElementById(p + 'wmFontSize').value || 12),
     fontFamily: document.getElementById(p + 'wmFontFamily').value,
     letterSpacing: Number(document.getElementById(p + 'wmLetterSpacing').value || 0),
-    colors: document.getElementById(p + 'wmColors').value.split(/\\r?\\n/).map(function(x) { return x.trim(); }).filter(Boolean),
+    colors: document.getElementById(p + 'wmColors').value.split(/\r?\n/).map(function(x) { return x.trim(); }).filter(Boolean),
     rotations: document.getElementById(p + 'wmRotations').value.split(',').map(function(x) { return Number(x.trim()); }).filter(function(x) { return !Number.isNaN(x); }),
     gridColumns: Number(document.getElementById(p + 'wmGridColumns').value || 1),
     checkInterval: Number(document.getElementById(p + 'wmCheckInterval').value || 2000)

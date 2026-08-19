@@ -286,7 +286,7 @@ sealed class WatermarkSettings
     public int FontSize { get; set; } = 12;
     public string FontFamily { get; set; } = "Arial";
     public int LetterSpacing { get; set; } = 2;
-    public List<string> Colors { get; set; } = ["rgba(0,0,0,0.01)", "rgba(255,0,0,0.01)", "rgba(0,0,255,0.01)"];
+    public List<string> Colors { get; set; } = ["rgba(30,41,59,0.12)", "rgba(190,30,45,0.08)", "rgba(29,78,216,0.08)"];
     public List<int> Rotations { get; set; } = [-45, -40, -35];
     public int GridColumns { get; set; } = 20;
     public int CheckInterval { get; set; } = 2000;

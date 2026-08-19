@@ -6,9 +6,9 @@
   "fontFamily": "Arial",
   "letterSpacing": 2,
   "colors": [
-    "rgba(0,0,0,0.01)",
-    "rgba(255,0,0,0.01)",
-    "rgba(0,0,255,0.01)"
+    "rgba(30,41,59,0.12)",
+    "rgba(190,30,45,0.08)",
+    "rgba(29,78,216,0.08)"
   ],
   "rotations": [-45, -40, -35],
   "gridColumns": 20,
