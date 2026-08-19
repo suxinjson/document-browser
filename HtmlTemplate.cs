@@ -8,7 +8,7 @@ static class HtmlTemplate
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>文档浏览器</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/github-markdown-css@5/github-markdown-light.min.css">
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11/styles/github.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11/styles/atom-one-dark.min.css">
 <script src="https://cdn.jsdelivr.net/npm/marked@4.3.0/marked.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets@11.11.1/highlight.min.js"></script>
 <!-- crypto-js：局域网 HTTP 下 crypto.subtle 不可用（仅 HTTPS / localhost 安全上下文可用），用它作 AES 解密回退 -->
@@ -115,9 +115,9 @@ static class HtmlTemplate
     background: var(--accent-light); color: var(--accent); padding: 2px 6px; border-radius: 4px; font-size: 0.9em;
   }
   .markdown-body pre {
-    background: #1e1e2e; border-radius: 8px; padding: 16px; overflow-x: auto; margin: 14px 0;
+    background: #282c34; border-radius: 8px; padding: 16px; overflow-x: auto; margin: 14px 0;
   }
-  .markdown-body pre code { background: none; color: #cdd6f4; padding: 0; font-size: 13px; }
+  .markdown-body pre code { background: none; color: #abb2bf; padding: 0; font-size: 13px; }
   .markdown-body blockquote {
     border-left: 4px solid var(--accent); padding: 8px 16px; background: var(--accent-light);
     border-radius: 0 8px 8px 0; margin: 14px 0; color: var(--text2);
