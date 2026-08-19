@@ -121,6 +121,12 @@ app.MapPut("/api/admin/shares/{shareId}", (HttpContext ctx, ShowcaseConfigStore 
     }
 });
 
+app.MapPut("/api/admin/defaults", (HttpContext ctx, ShowcaseConfigStore store, ShareSettings request) =>
+{
+    if (!IsAdminAuthenticated(ctx)) return Results.Unauthorized();
+    return Results.Ok(store.UpdateDefaults(request));
+});
+
 app.MapDelete("/api/admin/shares/{shareId}", (HttpContext ctx, ShowcaseConfigStore store, string shareId) =>
 {
     if (!IsAdminAuthenticated(ctx)) return Results.Unauthorized();

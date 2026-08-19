@@ -80,6 +80,9 @@ static class AdminTemplate
   .switch strong { display: block; font-size: 14px; }
   .switch span { display: block; font-size: 12px; color: #64748b; margin-top: 3px; }
   .switch input { width: 18px; height: 18px; }
+  .panel-section { border-top: 1px solid #eef2f7; margin-top: 16px; padding-top: 14px; }
+  .panel-section h3 { margin: 0 0 2px; font-size: 14px; color: #334155; }
+  .panel-section .hint { color: #94a3b8; font-size: 12px; margin: 2px 0 12px; }
   .empty { color: #64748b; text-align: center; padding: 32px 12px; }
   .section { display: none; }
   .section.active { display: block; }
@@ -128,8 +131,7 @@ static class AdminTemplate
     <div class="brand">DocShowcase<small>共享文档管理后台</small></div>
     <div>
       <button class="active" data-tab="shares" onclick="showTab('shares')">共享文档</button>
-      <button data-tab="settings" onclick="showTab('settings')">功能设置</button>
-      <button data-tab="watermark" onclick="showTab('watermark')">水印设置</button>
+      <button data-tab="defaults" onclick="showTab('defaults')">全局设置</button>
       <button data-tab="logs" onclick="showTab('logs')">运行信息</button>
     </div>
   </aside>
@@ -149,23 +151,16 @@ static class AdminTemplate
           <div class="panel-body"><div id="shareList" class="share-list"></div></div>
         </div>
         <div class="panel">
-          <div class="panel-header"><h2>共享信息</h2><button class="btn" onclick="saveSelected()">保存</button></div>
+          <div class="panel-header"><h2>共享设置</h2><button class="btn" onclick="saveSelected()">保存</button></div>
           <div class="panel-body" id="shareEditor"></div>
         </div>
       </div>
     </section>
 
-    <section id="tab-settings" class="section">
+    <section id="tab-defaults" class="section">
       <div class="panel">
-        <div class="panel-header"><h2>功能设置</h2><button class="btn" onclick="saveSelected()">保存</button></div>
-        <div class="panel-body" id="featureEditor"></div>
-      </div>
-    </section>
-
-    <section id="tab-watermark" class="section">
-      <div class="panel">
-        <div class="panel-header"><h2>水印设置</h2><button class="btn" onclick="saveSelected()">保存</button></div>
-        <div class="panel-body" id="watermarkEditor"></div>
+        <div class="panel-header"><h2>全局设置</h2><button class="btn" onclick="saveDefaults()">保存</button></div>
+        <div class="panel-body" id="defaultsEditor"></div>
       </div>
     </section>
 
@@ -312,6 +307,7 @@ function selectedShare() {
 function render() {
   renderShares();
   renderEditors();
+  renderDefaults();
   renderSummary();
 }
 
@@ -343,10 +339,7 @@ function selectShare(id) {
 function renderEditors() {
   var share = selectedShare();
   if (!share) {
-    var empty = '<div class="empty">请选择或新增一个共享目录。</div>';
-    document.getElementById('shareEditor').innerHTML = empty;
-    document.getElementById('featureEditor').innerHTML = empty;
-    document.getElementById('watermarkEditor').innerHTML = empty;
+    document.getElementById('shareEditor').innerHTML = '<div class="empty">请选择或新增一个共享目录。</div>';
     return;
   }
 
@@ -356,34 +349,58 @@ function renderEditors() {
     + '<div class="field"><label>状态</label><select id="shareEnabled"><option value="true">启动</option><option value="false">关闭</option></select></div>'
     + '<div class="field full"><label>目录路径</label><div class="path-row"><input id="sharePath" value="' + esc(share.path) + '"><button class="btn secondary" onclick="openDirPicker(\'sharePath\')">选择</button></div></div>'
     + '<div class="field full"><label>访问链接</label><div class="path-row"><input readonly value="' + esc(location.origin + '/s/' + share.id) + '"><button class="btn secondary" onclick="copyText(\'' + esc(location.origin + '/s/' + share.id) + '\')">复制</button></div></div>'
-    + '</div><div class="actions"><button class="btn danger" onclick="deleteSelected()">删除共享</button></div>';
+    + '</div>'
+    + '<div class="panel-section"><h3>功能设置</h3><p class="hint">以下设置仅对该共享生效</p>'
+    + renderSettings('sh', share.settings)
+    + '</div>'
+    + '<div class="panel-section"><h3>水印设置</h3><p class="hint">仅对该共享生效</p>'
+    + renderWatermark('sh', share.settings.watermark)
+    + '</div>'
+    + '<div class="actions"><button class="btn danger" onclick="deleteSelected()">删除共享</button></div>';
   document.getElementById('shareEnabled').value = String(share.enabled);
+}
 
-  document.getElementById('featureEditor').innerHTML =
-    '<div class="switches">'
-    + sw('loginEnabled', '启用登录', '访问共享前需要输入密码', share.settings.loginEnabled)
-    + sw('encryptionEnabled', '启用传输加密', '文件树和内容接口返回加密数据', share.settings.encryptionEnabled)
-    + sw('copyEnabled', '允许复制', '允许选择文字、复制和右键菜单', share.settings.copyEnabled)
-    + sw('protectionEnabled', '启用页面保护', '拦截打印、快捷键和开发工具检测', share.settings.protectionEnabled)
-    + sw('watermarkEnabled', '启用水印', '水印总开关，可叠加水印自身开关', share.settings.watermarkEnabled)
-    + '</div><div class="form-grid" style="margin-top:16px">'
-    + field('访问密码', 'accessPassword', share.settings.accessPassword)
-    + field('管理员密码', 'adminPassword', share.settings.adminPassword)
+function renderDefaults() {
+  var el = document.getElementById('defaultsEditor');
+  if (!state) { el.innerHTML = ''; return; }
+  var d = state.defaults || {};
+  d.watermark = d.watermark || {};
+  el.innerHTML =
+    '<div class="panel-section"><h3>功能设置</h3><p class="hint">新建共享时将继承以下默认值</p>'
+    + renderSettings('dflt', d)
+    + '</div>'
+    + '<div class="panel-section"><h3>水印设置</h3><p class="hint">新建共享时将继承以下默认水印</p>'
+    + renderWatermark('dflt', d.watermark)
     + '</div>';
+}
 
-  var w = share.settings.watermark;
-  document.getElementById('watermarkEditor').innerHTML =
-    '<div class="switches">' + sw('wmEnabled', '水印自身开关', '关闭后仅当前共享不显示水印', w.enabled) + '</div>'
+function renderSettings(p, s) {
+  s = s || {};
+  return '<div class="switches">'
+    + sw(p + 'loginEnabled', '启用登录', '访问共享前需要输入密码', s.loginEnabled)
+    + sw(p + 'encryptionEnabled', '启用传输加密', '文件树和内容接口返回加密数据', s.encryptionEnabled)
+    + sw(p + 'copyEnabled', '允许复制', '允许选择文字、复制和右键菜单', s.copyEnabled)
+    + sw(p + 'protectionEnabled', '启用页面保护', '拦截打印、快捷键和开发工具检测', s.protectionEnabled)
+    + sw(p + 'watermarkEnabled', '启用水印', '水印总开关，可叠加水印自身开关', s.watermarkEnabled)
+    + '</div><div class="form-grid" style="margin-top:16px">'
+    + field('访问密码', p + 'accessPassword', s.accessPassword)
+    + field('管理员密码', p + 'adminPassword', s.adminPassword)
+    + '</div>';
+}
+
+function renderWatermark(p, w) {
+  w = w || {};
+  return '<div class="switches">' + sw(p + 'wmEnabled', '水印自身开关', '关闭后不显示水印', w.enabled) + '</div>'
     + '<div class="form-grid" style="margin-top:16px">'
-    + field('水印文本', 'wmText', w.text, true)
-    + numField('数量', 'wmCount', w.count)
-    + numField('字号', 'wmFontSize', w.fontSize)
-    + field('字体', 'wmFontFamily', w.fontFamily)
-    + numField('字距', 'wmLetterSpacing', w.letterSpacing)
-    + numField('网格列数', 'wmGridColumns', w.gridColumns)
-    + numField('检查间隔(ms)', 'wmCheckInterval', w.checkInterval)
-    + textArea('颜色，每行一个 CSS 颜色', 'wmColors', (w.colors || []).join('\\n'))
-    + field('旋转角度，逗号分隔', 'wmRotations', (w.rotations || []).join(', '))
+    + field('水印文本', p + 'wmText', w.text, true)
+    + numField('数量', p + 'wmCount', w.count)
+    + numField('字号', p + 'wmFontSize', w.fontSize)
+    + field('字体', p + 'wmFontFamily', w.fontFamily)
+    + numField('字距', p + 'wmLetterSpacing', w.letterSpacing)
+    + numField('网格列数', p + 'wmGridColumns', w.gridColumns)
+    + numField('检查间隔(ms)', p + 'wmCheckInterval', w.checkInterval)
+    + textArea('颜色，每行一个 CSS 颜色', p + 'wmColors', (w.colors || []).join('\\n'))
+    + field('旋转角度，逗号分隔', p + 'wmRotations', (w.rotations || []).join(', '))
     + '</div>';
 }
 
@@ -403,27 +420,31 @@ function sw(id, title, desc, checked) {
   return '<label class="switch"><span><strong>' + title + '</strong><span>' + desc + '</span></span><input id="' + id + '" type="checkbox" ' + (checked ? 'checked' : '') + '></label>';
 }
 
-function readSettings() {
+function readSettings(p) {
   return {
-    loginEnabled: document.getElementById('loginEnabled').checked,
-    watermarkEnabled: document.getElementById('watermarkEnabled').checked,
-    encryptionEnabled: document.getElementById('encryptionEnabled').checked,
-    copyEnabled: document.getElementById('copyEnabled').checked,
-    protectionEnabled: document.getElementById('protectionEnabled').checked,
-    accessPassword: document.getElementById('accessPassword').value,
-    adminPassword: document.getElementById('adminPassword').value,
-    watermark: {
-      enabled: document.getElementById('wmEnabled').checked,
-      text: document.getElementById('wmText').value,
-      count: Number(document.getElementById('wmCount').value || 0),
-      fontSize: Number(document.getElementById('wmFontSize').value || 12),
-      fontFamily: document.getElementById('wmFontFamily').value,
-      letterSpacing: Number(document.getElementById('wmLetterSpacing').value || 0),
-      colors: document.getElementById('wmColors').value.split(/\\r?\\n/).map(function(x) { return x.trim(); }).filter(Boolean),
-      rotations: document.getElementById('wmRotations').value.split(',').map(function(x) { return Number(x.trim()); }).filter(function(x) { return !Number.isNaN(x); }),
-      gridColumns: Number(document.getElementById('wmGridColumns').value || 1),
-      checkInterval: Number(document.getElementById('wmCheckInterval').value || 2000)
-    }
+    loginEnabled: document.getElementById(p + 'loginEnabled').checked,
+    watermarkEnabled: document.getElementById(p + 'watermarkEnabled').checked,
+    encryptionEnabled: document.getElementById(p + 'encryptionEnabled').checked,
+    copyEnabled: document.getElementById(p + 'copyEnabled').checked,
+    protectionEnabled: document.getElementById(p + 'protectionEnabled').checked,
+    accessPassword: document.getElementById(p + 'accessPassword').value,
+    adminPassword: document.getElementById(p + 'adminPassword').value,
+    watermark: readWatermark(p)
+  };
+}
+
+function readWatermark(p) {
+  return {
+    enabled: document.getElementById(p + 'wmEnabled').checked,
+    text: document.getElementById(p + 'wmText').value,
+    count: Number(document.getElementById(p + 'wmCount').value || 0),
+    fontSize: Number(document.getElementById(p + 'wmFontSize').value || 12),
+    fontFamily: document.getElementById(p + 'wmFontFamily').value,
+    letterSpacing: Number(document.getElementById(p + 'wmLetterSpacing').value || 0),
+    colors: document.getElementById(p + 'wmColors').value.split(/\\r?\\n/).map(function(x) { return x.trim(); }).filter(Boolean),
+    rotations: document.getElementById(p + 'wmRotations').value.split(',').map(function(x) { return Number(x.trim()); }).filter(function(x) { return !Number.isNaN(x); }),
+    gridColumns: Number(document.getElementById(p + 'wmGridColumns').value || 1),
+    checkInterval: Number(document.getElementById(p + 'wmCheckInterval').value || 2000)
   };
 }
 
@@ -437,10 +458,20 @@ async function saveSelected() {
       name: document.getElementById('shareName').value,
       path: document.getElementById('sharePath').value,
       enabled: document.getElementById('shareEnabled').value === 'true',
-      settings: readSettings()
+      settings: readSettings('sh')
     })
   });
   toast('已保存');
+  await loadConfig();
+}
+
+async function saveDefaults() {
+  await api('/api/admin/defaults', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(readSettings('dflt'))
+  });
+  toast('已保存全局设置');
   await loadConfig();
 }
 

@@ -101,6 +101,17 @@ sealed class ShowcaseConfigStore
         }
     }
 
+    public ShareSettings UpdateDefaults(ShareSettings settings)
+    {
+        lock (_lock)
+        {
+            _state.Defaults = settings;
+            _state.Defaults.Watermark ??= new WatermarkSettings();
+            SaveLocked();
+            return Clone(_state.Defaults);
+        }
+    }
+
     public ShareItem? EnsureInitialShare(string? path)
     {
         if (string.IsNullOrWhiteSpace(path) || !Directory.Exists(path)) return null;
