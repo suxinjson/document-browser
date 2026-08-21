@@ -83,6 +83,11 @@ static class AdminTemplate
   .panel-section { border-top: 1px solid #eef2f7; margin-top: 16px; padding-top: 14px; }
   .panel-section h3 { margin: 0 0 2px; font-size: 14px; color: #334155; }
   .panel-section .hint { color: #94a3b8; font-size: 12px; margin: 2px 0 12px; }
+  .wm-color-rows { display: flex; flex-direction: column; gap: 8px; }
+  .wm-color-row { display: grid; grid-template-columns: 56px 1fr 158px auto; gap: 8px; align-items: center; }
+  .wm-color-row input[type="color"] { width: 56px; height: 34px; padding: 2px; border-radius: 6px; cursor: pointer; background: #fff; }
+  .wm-color-row input[type="range"] { margin: 0; }
+  .wm-color-label { font-family: Consolas, "Courier New", monospace; font-size: 12px; color: #475569; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .empty { color: #64748b; text-align: center; padding: 32px 12px; }
   .section { display: none; }
   .section.active { display: block; }
@@ -399,9 +404,86 @@ function renderWatermark(p, w) {
     + numField('字距', p + 'wmLetterSpacing', w.letterSpacing)
     + numField('网格列数', p + 'wmGridColumns', w.gridColumns)
     + numField('检查间隔(ms)', p + 'wmCheckInterval', w.checkInterval)
-    + textArea('颜色，每行一个 CSS 颜色', p + 'wmColors', (w.colors || []).join('\n'))
+    + '<div class="field full"><label>水印颜色</label>'
+    + '<div class="wm-color-rows" id="' + p + 'wmColors">' + wmColorRowsHtml(w.colors) + '</div>'
+    + '<button class="btn ghost" type="button" onclick="addWmColorRow(\'' + p + 'wmColors\')">+ 添加颜色</button>'
+    + '<p class="hint">色块选颜色，滑块调不透明度，右侧实时预览；可添加多色轮换。越明显越能防截图泄露。</p>'
+    + '</div>'
     + field('旋转角度，逗号分隔', p + 'wmRotations', (w.rotations || []).join(', '))
     + '</div>';
+}
+
+// ===== 水印颜色编辑器：色块 + 不透明度滑块 + 实时预览 =====
+function wmColorRowsHtml(colors) {
+  colors = (colors || []).filter(Boolean);
+  if (!colors.length) colors = ['rgba(0,0,0,0.10)'];
+  return colors.map(wmColorRowHtml).join('');
+}
+
+function wmColorRowHtml(c) {
+  var p = parseColorToRgba(c);
+  var hex = toHex(p.r, p.g, p.b);
+  var a = Math.round(p.a * 100);
+  return '<div class="wm-color-row">'
+    + '<input type="color" class="wm-color-pick" value="' + hex + '" oninput="wmRowChanged(this)" title="颜色">'
+    + '<input type="range" class="wm-color-alpha" min="0" max="100" value="' + a + '" oninput="wmRowChanged(this)" title="不透明度">'
+    + '<span class="wm-color-label">' + rgbaString(p.r, p.g, p.b, a / 100) + '</span>'
+    + '<button class="btn ghost" type="button" onclick="removeWmColorRow(this)" title="删除该颜色">✕</button>'
+    + '</div>';
+}
+
+function addWmColorRow(containerId) {
+  var el = document.getElementById(containerId);
+  if (el) el.insertAdjacentHTML('beforeend', wmColorRowHtml('rgba(0,0,0,0.10)'));
+}
+
+function removeWmColorRow(btn) {
+  var container = btn.closest('.wm-color-rows');
+  if (container && container.querySelectorAll('.wm-color-row').length <= 1) { toast('至少保留一个颜色'); return; }
+  var row = btn.closest('.wm-color-row');
+  if (row) row.remove();
+}
+
+function wmRowChanged(input) {
+  var row = input.closest('.wm-color-row');
+  if (!row) return;
+  var rgb = parseHex(row.querySelector('.wm-color-pick').value);
+  var a = Number(row.querySelector('.wm-color-alpha').value) / 100;
+  row.querySelector('.wm-color-label').textContent = rgbaString(rgb.r, rgb.g, rgb.b, a);
+}
+
+function readWmColors(containerId) {
+  var colors = [];
+  var container = document.getElementById(containerId);
+  if (!container) return colors;
+  container.querySelectorAll('.wm-color-row').forEach(function(row) {
+    var rgb = parseHex(row.querySelector('.wm-color-pick').value);
+    var a = Number(row.querySelector('.wm-color-alpha').value) / 100;
+    colors.push(rgbaString(rgb.r, rgb.g, rgb.b, a));
+  });
+  return colors;
+}
+
+function parseColorToRgba(c) {
+  var m = /rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)(?:\s*,\s*([\d.]+))?\s*\)/i.exec(c || '');
+  if (m) return { r: +m[1], g: +m[2], b: +m[3], a: m[4] != null ? +m[4] : 1 };
+  var h = /^#?([0-9a-f]{6})$/i.exec((c || '').trim());
+  if (h) return { r: parseInt(h[1].substr(0, 2), 16), g: parseInt(h[1].substr(2, 2), 16), b: parseInt(h[1].substr(4, 2), 16), a: 1 };
+  return { r: 0, g: 0, b: 0, a: 0.1 };
+}
+
+function parseHex(hex) {
+  var h = (hex || '#000000').replace('#', '');
+  return { r: parseInt(h.substr(0, 2), 16), g: parseInt(h.substr(2, 2), 16), b: parseInt(h.substr(4, 2), 16) };
+}
+
+function toHex(r, g, b) {
+  function h(n) { var s = Math.max(0, Math.min(255, Math.round(n))).toString(16); return s.length < 2 ? '0' + s : s; }
+  return '#' + h(r) + h(g) + h(b);
+}
+
+function rgbaString(r, g, b, a) {
+  return 'rgba(' + Math.round(r) + ',' + Math.round(g) + ',' + Math.round(b) + ',' + Math.round(a * 100) / 100 + ')';
 }
 
 function field(label, id, value, full) {
@@ -441,7 +523,7 @@ function readWatermark(p) {
     fontSize: Number(document.getElementById(p + 'wmFontSize').value || 12),
     fontFamily: document.getElementById(p + 'wmFontFamily').value,
     letterSpacing: Number(document.getElementById(p + 'wmLetterSpacing').value || 0),
-    colors: document.getElementById(p + 'wmColors').value.split(/\r?\n/).map(function(x) { return x.trim(); }).filter(Boolean),
+    colors: readWmColors(p + 'wmColors'),
     rotations: document.getElementById(p + 'wmRotations').value.split(',').map(function(x) { return Number(x.trim()); }).filter(function(x) { return !Number.isNaN(x); }),
     gridColumns: Number(document.getElementById(p + 'wmGridColumns').value || 1),
     checkInterval: Number(document.getElementById(p + 'wmCheckInterval').value || 2000)
