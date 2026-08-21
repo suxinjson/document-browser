@@ -156,10 +156,12 @@ static class FileService
         return (null, null);
     }
 
-    // 生成节点 id：原路径的 SHA256 哈希前 8 位。避免中文文件名被替换成下划线串、保证唯一且跨重启稳定
+    // 生成节点 id：原路径统一为 / 分隔符后的 SHA256 哈希前 8 位。保证唯一、跨重启稳定，
+    // 且 BuildTree 与 FindById 两处算出的 id 一致（避免 Windows 反斜杠导致子目录文件匹配不上）
     static string MakeId(string path)
     {
-        var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(path))).ToLowerInvariant();
+        var normalized = path.Replace('\\', '/');
+        var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(normalized))).ToLowerInvariant();
         return hash[..8];
     }
 }
