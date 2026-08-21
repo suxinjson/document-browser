@@ -1,4 +1,5 @@
-using System.Text.RegularExpressions;
+using System.Security.Cryptography;
+using System.Text;
 
 static class FileService
 {
@@ -155,8 +156,12 @@ static class FileService
         return (null, null);
     }
 
-    static string MakeId(string path) =>
-        Regex.Replace(path, @"[^a-zA-Z0-9_-]", "_");
+    // 生成节点 id：原路径的 SHA256 哈希前 8 位。避免中文文件名被替换成下划线串、保证唯一且跨重启稳定
+    static string MakeId(string path)
+    {
+        var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(path))).ToLowerInvariant();
+        return hash[..8];
+    }
 }
 
 class TreeNode
